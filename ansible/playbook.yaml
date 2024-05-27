@@ -1,0 +1,190 @@
+---
+- name: Install Jenkins and Docker on localhost
+  hosts: localhost
+  become: yes
+  vars:
+    jenkins_version: "2.452.1"
+    containerd_version: "1.6.32-1"
+    docker_ce_version: "24.0.9-1~ubuntu.22.04~jammy"
+    docker_ce_cli_version: "24.0.9-1~ubuntu.22.04~jammy"
+    docker_buildx_plugin_version: "0.14.0-1~ubuntu.22.04~jammy"
+  pre_tasks:
+    - name: Gather ansible user information
+      set_fact:
+        ansible_user: "{{ lookup('env', 'USER') }}"
+  tasks:
+    - name: Install required system packages
+      apt:
+        name: "{{ item }}"
+        state: latest
+        update_cache: yes
+      loop:
+        - apt-transport-https
+        - ca-certificates
+        - curl
+        - gnupg
+        - lsb-release
+        - software-properties-common
+
+    - name: Create directory for Docker deb packages
+      file:
+        path: /tmp/docker
+        state: directory
+
+    - name: Download Docker deb packages
+      get_url:
+        url: "{{ item.url }}"
+        dest: "/tmp/docker/{{ item.name }}"
+      loop:
+        - { name: "containerd.io_{{ containerd_version }}_amd64.deb", url: "https://download.docker.com/linux/ubuntu/dists/jammy/pool/stable/amd64/containerd.io_{{ containerd_version }}_amd64.deb" }
+        - { name: "docker-ce-cli_{{ docker_ce_cli_version }}_amd64.deb", url: "https://download.docker.com/linux/ubuntu/dists/jammy/pool/stable/amd64/docker-ce-cli_{{ docker_ce_cli_version }}_amd64.deb" }
+        - { name: "docker-ce_{{ docker_ce_version }}_amd64.deb", url: "https://download.docker.com/linux/ubuntu/dists/jammy/pool/stable/amd64/docker-ce_{{ docker_ce_version }}_amd64.deb" }
+        - { name: "docker-buildx-plugin_{{ docker_buildx_plugin_version }}_amd64.deb", url: "https://download.docker.com/linux/ubuntu/dists/jammy/pool/stable/amd64/docker-buildx-plugin_{{ docker_buildx_plugin_version }}_amd64.deb" }
+
+    - name: Install Docker deb packages
+      apt:
+        deb: "/tmp/docker/{{ item }}"
+      loop:
+        - "docker-ce-cli_{{ docker_ce_cli_version }}_amd64.deb"
+        - "containerd.io_{{ containerd_version }}_amd64.deb"
+        - "docker-ce_{{ docker_ce_version }}_amd64.deb"
+        - "docker-buildx-plugin_{{ docker_buildx_plugin_version }}_amd64.deb"
+
+    - name: Add user to Docker group
+      user:
+        name: "{{ ansible_user }}"
+        groups: docker
+        append: yes
+
+    - name: Start Docker service
+      service:
+        name: docker
+        state: started
+        enabled: yes
+
+    - name: Verify Docker installation
+      command: docker run hello-world
+      register: docker_output
+      failed_when: "'Hello from Docker!' not in docker_output.stdout"
+
+    - name: Install OpenJDK
+      apt:
+        name: openjdk-17-jdk
+        state: present
+
+    - name: Download Jenkins deb package
+      get_url:
+        url: https://pkg.jenkins.io/debian-stable/binary/jenkins_{{ jenkins_version }}_all.deb
+        dest: /tmp/jenkins.deb
+      when: "jenkins_version not in lookup('ansible.builtin.command', 'dpkg -l | grep jenkins', quiet=True)"
+
+    - name: Install Jenkins deb package
+      apt:
+        deb: /tmp/jenkins.deb
+      when: "jenkins_version not in lookup('ansible.builtin.command', 'dpkg -l | grep jenkins', quiet=True)"
+
+    - name: Start and enable Jenkins
+      systemd:
+        name: jenkins
+        state: started
+        enabled: yes
+
+- name: Setup Minikube on remote host
+  hosts: minikube
+  become: yes
+  vars:
+    kubectl_version: "v1.30.1"
+  tasks:
+    - name: Update apt repository and install dependencies
+      apt:
+        update_cache: yes
+        name:
+          - apt-transport-https
+          - ca-certificates
+          - curl
+          - software-properties-common
+        state: present
+
+    - name: Install Minikube dependencies
+      apt:
+        name:
+          - conntrack
+          - socat
+          - ebtables
+          - ipset
+          - jq
+          - nfs-common
+        state: present
+
+    - name: Install Docker
+      apt:
+        name: docker.io
+        state: present
+
+    - name: Add user to Docker group
+      user:
+        name: "{{ ansible_user }}"
+        groups: docker
+        append: yes
+
+    - name: Download and install Minikube
+      get_url:
+        url: https://storage.googleapis.com/minikube/releases/latest/minikube-linux-amd64
+        dest: /usr/local/bin/minikube
+        mode: '0755'
+      when: "not lookup('ansible.builtin.command', 'minikube version', quiet=True)"
+
+    - name: Download and install kubectl
+      get_url:
+        url: https://dl.k8s.io/release/{{ kubectl_version }}/bin/linux/amd64/kubectl
+        dest: /usr/local/bin/kubectl
+        mode: '0755'
+      when: "not lookup('ansible.builtin.command', 'kubectl version --client', quiet=True)"
+
+    - name: Start Minikube with Docker driver
+      command: minikube start --driver=docker
+      args:
+        creates: /root/.minikube
+
+    - name: Create Jenkins user
+      user:
+        name: jenkins
+        comment: "Jenkins User"
+        shell: /bin/bash
+        create_home: yes
+
+    - name: Add Jenkins user to Docker group
+      user:
+        name: jenkins
+        groups: docker
+        append: yes
+
+    - name: Create directory for Docker images
+      file:
+        path: /home/jenkins/docker-images
+        state: directory
+        owner: jenkins
+        group: jenkins
+        mode: '0755'
+
+    - name: Allow Jenkins user SSH access
+      authorized_key:
+        user: jenkins
+        state: present
+        key: "{{ lookup('file', '/home/ansible/.ssh/DockerImageKey.pub') }}"
+        path: /home/jenkins/.ssh/authorized_keys
+
+    - name: Set permissions for Jenkins .ssh directory
+      file:
+        path: /home/jenkins/.ssh
+        state: directory
+        owner: jenkins
+        group: jenkins
+        mode: '0700'
+
+    - name: Set permissions for Jenkins authorized_keys
+      file:
+        path: /home/jenkins/.ssh/authorized_keys
+        owner: jenkins
+        group: jenkins
+        mode: '0600'

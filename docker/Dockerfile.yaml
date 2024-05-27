@@ -1,0 +1,19 @@
+# Use the official Python image from the Docker Hub
+FROM python:3.8-slim
+
+# Metadata
+LABEL maintainer="testovoe@_.ru"
+LABEL version="1.0"
+LABEL description="A simple Hello World Python application"
+
+# Set the working directory
+WORKDIR /app
+
+# Copy the current directory contents into the container at /app
+COPY hello.py .
+ 
+# Run the application
+CMD ["python", "hello.py"]
+
+# Рealth check to ensure container is running
+HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 CMD python hello.py || exit 1

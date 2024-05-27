@@ -1,0 +1,65 @@
+pipeline {
+    agent any
+    environment {
+        DOCKER_IMAGE = "hello-world-python:latest"
+        TAR_FILE = "hello-world-python.tar"
+        K8S_NODE = "root@192.168.217.136"
+        HELM_CHART_PATH = "${WORKSPACE}/helm-chart"
+    }
+    stages {
+        stage('Clone Repository') {
+            steps {
+                git 'https://github.com/ChinaTesting/test1.git'
+            }
+        }
+        stage('Build Docker Image') {
+            steps {
+                script {
+                    docker.build("${DOCKER_IMAGE}", "docker/")
+                }
+            }
+        }
+        stage('Save Docker Image to Tar') {
+            steps {
+                script {
+                    sh "docker save -o docker/${TAR_FILE} ${DOCKER_IMAGE}"
+                }
+            }
+        }
+        stage('Transfer Docker Image to Kubernetes Node') {
+            steps {
+                withCredentials([sshUserPrivateKey(credentialsId: 'docker-image-key', keyFileVariable: 'SSH_KEY')]) {
+                    script {
+                        sh "scp -i ${SSH_KEY} docker/${TAR_FILE} ${K8S_NODE}:/root/"
+                    }
+                }
+            }
+        }
+        stage('Load Docker Image on Kubernetes Node') {
+            steps {
+                withCredentials([sshUserPrivateKey(credentialsId: 'docker-image-key', keyFileVariable: 'SSH_KEY')]) {
+                    script {
+                        sh "ssh -i ${SSH_KEY} ${K8S_NODE} 'docker load -i /root/${TAR_FILE}'"
+                    }
+                }
+            }
+        }
+        stage('Deploy to Minikube') {
+            steps {
+                withCredentials([sshUserPrivateKey(credentialsId: 'docker-image-key', keyFileVariable: 'SSH_KEY')]) {
+                    script {
+                        sh "ssh -i ${SSH_KEY} ${K8S_NODE} 'helm upgrade --install hello-world /root/test1/helm-chart/'"
+                    }
+                }
+            }
+        }
+    }
+    post {
+        success {
+            echo 'Pipeline successfully completed.'
+        }
+        failure {
+            echo 'Pipeline failed. Please check the logs.'
+        }
+    }
+}
