@@ -44,7 +44,7 @@ The `helm/mychart/` directory contains the Helm chart for deploying the Docker i
 3. **Deploy to Minikube**:
     - Initialize Minikube:
       ```bash
-      minikube start --driver=none
+      minikube start --driver=docker
       ```
     - Deploy the Helm chart:
       ```bash
