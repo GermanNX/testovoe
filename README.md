@@ -1,4 +1,4 @@
-Project Overview
+GProject Overview
 This repository contains the configuration files and scripts necessary to set up a CI/CD pipeline using Jenkins, Docker, and Kubernetes (Minikube). Below is a brief description of each component and instructions on how to use them.
 
 Ansible Playbook
@@ -27,7 +27,7 @@ Set up Ansible:
 
 Run the Ansible playbook to install Jenkins, Docker, Git, and Minikube:
 bash
-Копировать код
+ 
 ansible-playbook -i hosts.yaml ansible/playbook.yaml
 Build and Push Docker Image:
 
@@ -36,15 +36,15 @@ Deploy to Minikube:
 
 Initialize Minikube:
 bash
-Копировать код
+ 
 minikube start --driver=docker
 Deploy the Helm chart:
 bash
-Копировать код
+ 
 helm install mychart helm/mychart
 Repository Structure
 markdown
-Копировать код
+ 
 project-root/
 ├── ansible/
 │   ├── playbook.yaml
