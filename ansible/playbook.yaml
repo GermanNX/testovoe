@@ -1,5 +1,5 @@
 ---
-- name: Install Jenkins and Docker on localhost
+- name: Install Jenkins, Docker, and Git on localhost
   hosts: localhost
   become: yes
   vars:
@@ -25,6 +25,7 @@
         - gnupg
         - lsb-release
         - software-properties-common
+        - git
 
     - name: Create directory for Docker deb packages
       file:
@@ -50,6 +51,11 @@
         - "docker-ce_{{ docker_ce_version }}_amd64.deb"
         - "docker-buildx-plugin_{{ docker_buildx_plugin_version }}_amd64.deb"
 
+    - name: Ensure Docker group exists
+      group:
+        name: docker
+        state: present
+
     - name: Add user to Docker group
       user:
         name: "{{ ansible_user }}"
@@ -62,33 +68,31 @@
         state: started
         enabled: yes
 
-    - name: Verify Docker installation
-      command: docker run hello-world
-      register: docker_output
-      failed_when: "'Hello from Docker!' not in docker_output.stdout"
-
     - name: Install OpenJDK
       apt:
         name: openjdk-17-jdk
         state: present
 
-    - name: Download Jenkins deb package
+    - name: Download Jenkins repository key
       get_url:
-        url: https://pkg.jenkins.io/debian-stable/binary/jenkins_{{ jenkins_version }}_all.deb
-        dest: /tmp/jenkins.deb
-      when: "jenkins_version not in lookup('ansible.builtin.command', 'dpkg -l | grep jenkins', quiet=True)"
+        url: "https://pkg.jenkins.io/debian-stable/jenkins.io-2023.key"
+        dest: "/usr/share/keyrings/jenkins-keyring.asc"
+        mode: '0644'
 
-    - name: Install Jenkins deb package
+    - name: Add Jenkins repository
+      lineinfile:
+        path: "/etc/apt/sources.list.d/jenkins.list"
+        line: "deb [signed-by=/usr/share/keyrings/jenkins-keyring.asc] https://pkg.jenkins.io/debian-stable binary/"
+        create: yes
+
+    - name: Update apt cache after adding Jenkins repository
       apt:
-        deb: /tmp/jenkins.deb
-      when: "jenkins_version not in lookup('ansible.builtin.command', 'dpkg -l | grep jenkins', quiet=True)"
+        update_cache: yes
 
-    - name: Start and enable Jenkins
-      systemd:
+    - name: Install Jenkins
+      apt:
         name: jenkins
-        state: started
-        enabled: yes
-
+        state: present
 - name: Setup Minikube on remote host
   hosts: minikube
   become: yes
@@ -123,7 +127,7 @@
 
     - name: Add user to Docker group
       user:
-        name: "{{ ansible_user }}"
+        name: "{{ ansible_user | default(lookup('env', 'USER')) }}"
         groups: docker
         append: yes
 
@@ -132,14 +136,12 @@
         url: https://storage.googleapis.com/minikube/releases/latest/minikube-linux-amd64
         dest: /usr/local/bin/minikube
         mode: '0755'
-      when: "not lookup('ansible.builtin.command', 'minikube version', quiet=True)"
 
     - name: Download and install kubectl
       get_url:
         url: https://dl.k8s.io/release/{{ kubectl_version }}/bin/linux/amd64/kubectl
         dest: /usr/local/bin/kubectl
         mode: '0755'
-      when: "not lookup('ansible.builtin.command', 'kubectl version --client', quiet=True)"
 
     - name: Start Minikube with Docker driver
       command: minikube start --driver=docker
