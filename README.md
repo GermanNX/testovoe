@@ -1,80 +1,69 @@
-# Project Overview
-
+Project Overview
 This repository contains the configuration files and scripts necessary to set up a CI/CD pipeline using Jenkins, Docker, and Kubernetes (Minikube). Below is a brief description of each component and instructions on how to use them.
 
-## Ansible Playbook
+Ansible Playbook
+The Ansible playbook located in ansible/playbook.yaml installs Jenkins, Docker, Git, and Minikube on an Ubuntu machine.
 
-The Ansible playbook located in `ansible/playbook.yml` installs Jenkins, Docker, and Minikube on an Ubuntu machine.
+Docker
+The docker/ directory contains:
 
-## Docker
+Dockerfile: Builds a Docker image that runs a simple Python "Hello World" script.
+hello.py: A simple Python script that prints "Hello World".
+Jenkins
+The jenkins/Jenkinsfile defines a Jenkins pipeline that builds, tests, and pushes the Docker image to Docker Hub, and then deploys it to a Minikube cluster.
 
-The `docker/` directory contains:
-- `Dockerfile`: Builds a Docker image that runs a simple Python "Hello World" script.
-- `hello.py`: A simple Python script that prints "Hello World".
+Helm
+The helm/mychart/ directory contains the Helm chart for deploying the Docker image to a Minikube cluster.
 
-## Jenkins
+Getting Started
+Prerequisites
+Ansible
+Docker
+Jenkins
+Minikube
+Helm
+Instructions
+Set up Ansible:
 
-The `jenkins/Jenkinsfile` defines a Jenkins pipeline that builds, tests, and pushes the Docker image to Docker Hub.
+Run the Ansible playbook to install Jenkins, Docker, Git, and Minikube:
+bash
+Копировать код
+ansible-playbook -i hosts.yaml ansible/playbook.yaml
+Build and Push Docker Image:
 
-## Helm
+Create a Jenkins job using the pipeline defined in jenkins/Jenkinsfile.
+Deploy to Minikube:
 
-The `helm/mychart/` directory contains the Helm chart for deploying the Docker image to a Minikube cluster.
-
-## Getting Started
-
-### Prerequisites
-
-- Ansible
-- Docker
-- Jenkins
-- Minikube
-- Helm
-
-### Instructions
-
-1. **Set up Ansible**:
-    - Run the Ansible playbook to install Jenkins, Docker, and Minikube:
-      ```bash
-      ansible-playbook -i hosts ansible/playbook.yml
-      ```
-
-2. **Build and Push Docker Image**:
-    - Create a Jenkins job using the pipeline defined in `jenkins/Jenkinsfile`.
-
-3. **Deploy to Minikube**:
-    - Initialize Minikube:
-      ```bash
-      minikube start --driver=docker
-      ```
-    - Deploy the Helm chart:
-      ```bash
-      helm install mychart helm/mychart
-      ```
-
-## Repository Structure
-
-```
+Initialize Minikube:
+bash
+Копировать код
+minikube start --driver=docker
+Deploy the Helm chart:
+bash
+Копировать код
+helm install mychart helm/mychart
+Repository Structure
+markdown
+Копировать код
 project-root/
 ├── ansible/
-│   └── playbook.yaml
+│   ├── playbook.yaml
+│   └── hosts.yaml
 ├── docker/
 │   ├── Dockerfile
 │   └── hello.py
 ├── jenkins/
 │   └── Jenkinsfile
-└── helm-chart
-        ├── Chart.yaml
-        ├── values.yaml
-        └── templates/
-            ├── deployment.yaml
-            └── service.yaml
+└── helm/
+    ├── mychart/
+    │   ├── Chart.yaml
+    │   ├── values.yaml
+    │   └── templates/
+    │       ├── deployment.yaml
+    │       └── service.yaml
 └── README.md
-```
-
-### Contributing
-
+Contributing
 Please submit issues and pull requests for any improvements or fixes.
 
-### License
-
+License
 This project is licensed under the MIT License.

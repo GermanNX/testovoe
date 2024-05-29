@@ -4,7 +4,8 @@ pipeline {
         DOCKER_IMAGE = "hello-world-python:latest"
         TAR_FILE = "hello-world-python.tar"
         K8S_NODE = "root@192.168.217.136"
-        HELM_CHART_PATH = "${WORKSPACE}/helm-chart"
+        HELP_CHART_PATH = "/testovoe/helm-chart"
+        TMP_DIR = "/tmp"
     }
     stages {
         stage('Clone Repository') {
@@ -15,14 +16,10 @@ pipeline {
         stage('Build Docker Image') {
             steps {
                 script {
-                    docker.build("${DOCKER_IMAGE}", "docker/")
-                }
-            }
-        }
-        stage('Save Docker Image to Tar') {
-            steps {
-                script {
-                    sh "docker save -o docker/${TAR_FILE} ${DOCKER_IMAGE}"
+                    // Combining Docker build and save operations
+                    docker.build("${DOCKER_IMAGE}", "docker/").with {
+                        sh "docker save -o ${TMP_DIR}/${TAR_FILE} ${it.id}"
+                    }
                 }
             }
         }
@@ -30,17 +27,38 @@ pipeline {
             steps {
                 withCredentials([sshUserPrivateKey(credentialsId: 'docker-image-key', keyFileVariable: 'SSH_KEY')]) {
                     script {
-                        sh "scp -i ${SSH_KEY} docker/${TAR_FILE} ${K8S_NODE}:/root/"
+                        sh "scp -i ${SSH_KEY} ${TMP_DIR}/${TAR_FILE} ${K8S_NODE}:${TMP_DIR}/"
                     }
                 }
             }
         }
-        stage('Load Docker Image on Kubernetes Node') {
+        stage('Load Docker Image on Kubernetes Store') {
             steps {
                 withCredentials([sshUserPrivateKey(credentialsId: 'docker-image-key', keyFileVariable: 'SSH_KEY')]) {
                     script {
-                        sh "ssh -i ${SSH_KEY} ${K8S_NODE} 'docker load -i /root/${TAR_FILE}'"
+                        def loadResult = sh script: "ssh -i ${SSH_KEY} ${K8S_NODE} 'docker load -i ${TMP_DIR}/${TAR_FILE}'", returnStatus: true
+                        if (loadResult != 0) {
+                            error "Failed to load Docker image on Kubernetes node."
+                        }
                     }
+                }
+            }
+        }
+        stage('Check Image Transfer and Load Status') {
+            steps {
+                script {
+                    def check = sh script: "ssh -i ${SSH_KEY} ${K8S_NODE} 'docker images | grep ${DOCKER_IMAGE}'", returnStdout: true
+                    if (!check.trim()) {
+                        error "Docker image not loaded on the remote node."
+                    }
+                }
+            }
+        }
+        stage('Remove Docker Image from Localhost') {
+            steps {
+                script {
+                    sh "rm -f ${TMP_DIR}/${TAR_FILE}"
+                    sh "docker rmi ${DOCKER_IMAGE}"
                 }
             }
         }
@@ -48,13 +66,16 @@ pipeline {
             steps {
                 withCredentials([sshUserPrivateKey(credentialsId: 'docker-image-key', keyFileVariable: 'SSH_KEY')]) {
                     script {
-                        sh "ssh -i ${SSH_KEY} ${K8S_NODE} 'helm upgrade --install hello-world /root/test1/helm-chart/'"
+                        sh "ssh -i ${SSH_KEY} ${K8S_NODE} 'helm upgrade --install hello-world ${HELP_CHART_PATH}'"
                     }
                 }
             }
         }
     }
     post {
+        always {
+            cleanWs()
+        }
         success {
             echo 'Pipeline successfully completed.'
         }

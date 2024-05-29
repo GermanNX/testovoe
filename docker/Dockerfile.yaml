@@ -2,9 +2,9 @@
 FROM python:3.8-slim
 
 # Metadata
-LABEL maintainer="testovoe@_.ru"
+LABEL maintainer="GermanNX"
 LABEL version="1.0"
-LABEL description="A simple Hello World Python application"
+LABEL description="Python Hello World"
 
 # Set the working directory
 WORKDIR /app
