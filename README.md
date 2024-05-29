@@ -68,7 +68,7 @@ project-root/
 │   ├── playbook.yaml
 │   └── hosts.yaml
 ├── docker/
-│   ├── Dockerfile
+│   ├── Dockerfile.yaml
 │   └── hello.py
 ├── jenkins/
 │   └── Jenkinsfile
